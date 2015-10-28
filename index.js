@@ -38,6 +38,9 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
   // auth_id may be null
   setAuthAndDependencies(auth_id);
 
+  this.headers = {}
+  this.headerMap = {}
+
   // Authentication Methods
 
   this.setAuthToken = function( auth_id ) {
@@ -111,8 +114,6 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
           }
         }
 
-        headers['Gdata-version'] = '3.0';
-
         if ( method == 'POST' || method == 'PUT' ){
           headers['content-type'] = 'application/atom+xml';
         }
@@ -162,7 +163,6 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
         return cb(new Error('No response to getInfo call'))
       }
       var ss_data = {
-        id: data.id,
         title: data.title["_"],
         updated: data.updated,
         author: data.author,
@@ -178,36 +178,25 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
 
   // NOTE: worksheet IDs start at 1
 
-  this.addWorksheet = function( opts, cb ) {
-    var opts = opts || {};
-    var defaults = {
-      title: 'New Worksheet',
-      rowCount: 50,
-      colCount: 10
-    };
-
-    var opts = _.extend(defaults, opts);
-
-    var data_xml = '<entry xmlns="http://www.w3.org/2005/Atom" xmlns:gs="http://schemas.google.com/spreadsheets/2006"><title>' +
-        opts.title +
-      '</title><gs:rowCount>' +
-        opts.rowCount +
-      '</gs:rowCount><gs:colCount>' +
-        opts.colCount +
-      '</gs:colCount></entry>';
-
-    self.makeFeedRequest( ["worksheets", ss_key], 'POST', data_xml, cb );
-  }
-
   this.getRows = function( worksheet_id, opts, cb ){
+    var self = this
+
     // the first row is used as titles/keys and is not included
+    if (!this.headers[worksheet_id]) {
+      return this.getCells(worksheet_id, { 'max-row': 1, 'return-empty': true }, function (err, cells) {
+        if (err) throw err
+        self.headers[worksheet_id] = cells.map(function (cell) {
+          return cell.value
+        })
+        self.getRows(worksheet_id, opts, cb)
+      })
+    }
 
     // opts is optional
     if ( typeof( opts ) == 'function' ){
       cb = opts;
       opts = {};
     }
-
 
     var query  = {}
     if ( opts.start ) query["start-index"] = opts.start;
@@ -228,17 +217,25 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
       var entries = forceArray( data.entry );
       var i=0;
       entries.forEach( function( row_data ) {
-        rows.push( new SpreadsheetRow( self, row_data, entries_xml[ i++ ] ) );
+        rows.push( new SpreadsheetRow( self, self.headers[worksheet_id], row_data, entries_xml[ i++ ] ) );
       });
+      self.headerMap[worksheet_id] = rows[0] && rows[0].headerMap
       cb(null, rows);
     });
   }
 
   this.addRow = function( worksheet_id, data, cb ){
+    if (!this.headerMap[worksheet_id]) {
+      return this.getRows(worksheet_id, { 'max-row': 1 }, function () {
+        self.addRow(worksheet_id, data, cb)
+      })
+    }
+
     var data_xml = '<entry xmlns="http://www.w3.org/2005/Atom" xmlns:gsx="http://schemas.google.com/spreadsheets/2006/extended">' + "\n";
     Object.keys(data).forEach(function(key) {
       if (key != 'id' && key != 'title' && key != 'content' && key != '_links'){
-        data_xml += '<gsx:'+ xmlSafeColumnName(key) + '>' + xmlSafeValue(data[key]) + '</gsx:'+ xmlSafeColumnName(key) + '>' + "\n"
+        var prop = self.headerMap[worksheet_id][key]
+        data_xml += '<gsx:'+ xmlSafeColumnName(prop) + '>' + xmlSafeValue(data[key]) + '</gsx:'+ xmlSafeColumnName(prop) + '>' + "\n"
       }
     });
     data_xml += '</entry>';
@@ -273,47 +270,12 @@ var GooogleSpreadsheet = function( ss_key, auth_id, options ){
       cb( null, cells );
     });
   }
-
-  // this.bulkUpdateCells = function (worksheet_id, cells, cb) {
-  //   var entries = cells.map((cell, i) => {
-  //     cell._needsSave = false;
-  //     return `<entry>
-  //       <batch:id>${cell.id}</batch:id>
-  //       <batch:operation type="update"/>
-  //       <id>${cell.id}</id>
-  //       <link rel="edit" type="application/atom+xml"
-  //         href="${cell._links.edit}"/>
-  //       <gs:cell row="${cell.row}" col="${cell.col}" inputValue="${cell.getValueForSave()}"/>
-  //     </entry>`
-  //   });
-  //   var worksheetUrl = `https://spreadsheets.google.com/feeds/cells/${ss_key}/${worksheet_id}/private/full`;
-  //   var data_xml = `<feed xmlns="http://www.w3.org/2005/Atom"
-  //     xmlns:batch="http://schemas.google.com/gdata/batch"
-  //     xmlns:gs="http://schemas.google.com/spreadsheets/2006">
-  //     <id>${worksheetUrl}</id>
-  //     ${entries.join("\n")}
-  //   </feed>`
-  //   console.log(data_xml);
-  //   self.makeFeedRequest(`https://spreadsheets.google.com/feeds/cells/${ss_key}/${worksheet_id}/private/full/batch`,
-  //                        'POST', data_xml, cb)
-  // }
-
-  this.bulkUpdateCells = function (worksheet_id, cells, cb) {
-    var entries = cells.map(function (cell, i) {
-      cell._needsSave = false;
-      return "<entry>\n        <batch:id>" + cell.id + "</batch:id>\n        <batch:operation type=\"update\"/>\n        <id>" + cell.id + "</id>\n        <link rel=\"edit\" type=\"application/atom+xml\"\n          href=\"" + cell._links.edit + "\"/>\n        <gs:cell row=\"" + cell.row + "\" col=\"" + cell.col + "\" inputValue=\"" + cell.getValueForSave() + "\"/>\n      </entry>";
-    });
-    var worksheetUrl = "https://spreadsheets.google.com/feeds/cells/" + ss_key + "/" + worksheet_id + "/private/full";
-    var data_xml = "<feed xmlns=\"http://www.w3.org/2005/Atom\"\n      xmlns:batch=\"http://schemas.google.com/gdata/batch\"\n      xmlns:gs=\"http://schemas.google.com/spreadsheets/2006\">\n      <id>" + worksheetUrl + "</id>\n      " + entries.join("\n") + "\n    </feed>";
-    self.makeFeedRequest("https://spreadsheets.google.com/feeds/cells/" + ss_key + "/" + worksheet_id + "/private/full/batch", 'POST', data_xml, cb);
-  };
 };
 
 // Classes
 var SpreadsheetWorksheet = function( spreadsheet, data ){
   var self = this;
 
-  self.url = data.id;
   self.id = data.id.substring( data.id.lastIndexOf("/") + 1 );
   self.title = data.title["_"];
   self.rowCount = data['gs:rowCount'];
@@ -328,28 +290,29 @@ var SpreadsheetWorksheet = function( spreadsheet, data ){
   this.addRow = function( data, cb ){
     spreadsheet.addRow( self.id, data, cb );
   }
-  this.bulkUpdateCells = function( cells, cb ) {
-    spreadsheet.bulkUpdateCells( self.id, cells, cb );
-  }
-  this.del = function ( cb ){
-    spreadsheet.makeFeedRequest( self.url, 'DELETE', null, cb );
-  }
 }
 
-var SpreadsheetRow = function( spreadsheet, data, xml ){
+var SpreadsheetRow = function( spreadsheet, headers, data, xml ){
   var self = this;
   self['_xml'] = xml;
+  self.headers = headers
+  self.headerMap = {}
+  var idx = 0
   Object.keys(data).forEach(function(key) {
+    console.log('key', key)
+    console.log('data', data[key])
     var val = data[key];
     if(key.substring(0, 4) === "gsx:") {
+      var prop = headers[idx++]
       if(typeof val === 'object' && Object.keys(val).length === 0) {
         val = null;
       }
       if (key == "gsx:") {
-        self[key.substring(0, 3)] = val;
+        self.headerMap[prop] = key.substring(0, 3);
       } else {
-        self[key.substring(4)] = val;
+        self.headerMap[prop] = key.substring(4);
       }
+      self[prop] = val
     } else {
       if (key == "id") {
         self[key] = val;
@@ -376,8 +339,9 @@ var SpreadsheetRow = function( spreadsheet, data, xml ){
     // probably should make this part more robust?
     data_xml = data_xml.replace('<entry>', "<entry xmlns='http://www.w3.org/2005/Atom' xmlns:gsx='http://schemas.google.com/spreadsheets/2006/extended'>");
       Object.keys( self ).forEach( function(key) {
-        if (key.substr(0,1) != '_' && typeof( self[key] == 'string') ){
-          data_xml = data_xml.replace( new RegExp('<gsx:'+xmlSafeColumnName(key)+">([\\s\\S]*?)</gsx:"+xmlSafeColumnName(key)+'>'), '<gsx:'+xmlSafeColumnName(key)+'>'+ xmlSafeValue(self[key]) +'</gsx:'+xmlSafeColumnName(key)+'>');
+        if (~self.headers.indexOf(key) || (key.substr(0,1) != '_' && typeof( self[key] == 'string')) ){
+          var prop = self.headerMap[key]
+          data_xml = data_xml.replace( new RegExp('<gsx:'+xmlSafeColumnName(prop)+">([\\s\\S]*?)</gsx:"+xmlSafeColumnName(prop)+'>'), '<gsx:'+xmlSafeColumnName(prop)+'>'+ xmlSafeValue(self[key]) +'</gsx:'+xmlSafeColumnName(prop)+'>');
         }
     });
     spreadsheet.makeFeedRequest( self['_links']['edit'], 'PUT', data_xml, cb );
@@ -395,9 +359,6 @@ var SpreadsheetCell = function( spreadsheet, worksheet_id, data ){
   self.col = parseInt(data['gs:cell']['$']['col']);
   self.value = data['gs:cell']['_'];
   self.numericValue = data['gs:cell']['$']['numericValue'];
-  self.inputValue = data['gs:cell']['$']['inputValue'];
-
-  var _hasFormula = self.inputValue.substr(0,1) === '=';
 
   self['_links'] = [];
   links = forceArray( data.link );
@@ -405,27 +366,18 @@ var SpreadsheetCell = function( spreadsheet, worksheet_id, data ){
     self['_links'][ link['$']['rel'] ] = link['$']['href'];
   });
 
-  self.getValueForSave = function(){
-    if (_hasFormula){
-      return self.inputValue;
-    } else {
-      return xmlSafeValue(self.value);
-    }
-  }
-
   self.setValue = function(new_value, cb) {
     self.value = new_value;
     self.save(cb);
   };
 
   self.save = function(cb) {
-    self._needsSave = false;
-
+    new_value = xmlSafeValue(self.value);
     var edit_id = 'https://spreadsheets.google.com/feeds/cells/key/worksheetId/private/full/R'+self.row+'C'+self.col;
     var data_xml =
     '<entry><id>'+edit_id+'</id>'+
     '<link rel="edit" type="application/atom+xml" href="'+edit_id+'"/>'+
-    '<gs:cell row="'+self.row+'" col="'+self.col+'" inputValue="'+self.getValueForSave()+'"/></entry>'
+    '<gs:cell row="'+self.row+'" col="'+self.col+'" inputValue="'+new_value+'"/></entry>'
 
     data_xml = data_xml.replace('<entry>', "<entry xmlns='http://www.w3.org/2005/Atom' xmlns:gs='http://schemas.google.com/spreadsheets/2006'>");
 
