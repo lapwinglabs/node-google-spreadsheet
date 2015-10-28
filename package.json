@@ -1,6 +1,6 @@
 {
-  "author": "Theo Ephraim <theozero@gmail.com> (http://theoephraim.com)",
-  "name": "google-spreadsheet",
+  "author": "Finbox.io <code@finbox.io> (https://finbox.io)",
+  "name": "finbox-google-sheets",
   "description": "Google Spreadsheet Data API -- simple interface to read/write rows + cells",
   "version": "1.1.0",
   "keywords": [
@@ -10,10 +10,10 @@
     "gdata",
     "api"
   ],
-  "homepage": "https://github.com/theoephraim/node-google-spreadsheet",
+  "homepage": "https://github.com/lapwinglabs/node-google-spreadsheet",
   "repository": {
     "type": "git",
-    "url": "git://github.com/theoephraim/node-google-spreadsheet.git"
+    "url": "git://github.com/lapwinglabs/node-google-spreadsheet.git"
   },
   "main": "index.js",
   "engines": {
@@ -31,6 +31,12 @@
     "async": "~0.2.9"
   },
   "scripts": {
-    "test": "node_modules/.bin/nodeunit test/spreadsheet_test.js"
+    "test": "nodeunit test/spreadsheet_test.js"
+  },
+  "bugs": {
+    "url": "https://github.com/lapwinglabs/node-google-spreadsheet/issues"
+  },
+  "directories": {
+    "test": "test"
   }
 }
