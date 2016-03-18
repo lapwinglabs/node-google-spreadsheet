@@ -265,6 +265,9 @@ var SpreadsheetRow = function (spreadsheet, headers, data, xml) {
       if (key === "gsx:") this.headerMap[prop] = key.substring(0, 3)
       else this.headerMap[prop] = key.substring(4)
 
+      if (val === 'TRUE') val = true
+      else if (val === 'FALSE') val = false
+      else if (!Number.isNaN(+val)) val = +val
       this[prop] = val
     } else {
       if (key === "id") this[key] = val
@@ -278,7 +281,10 @@ var SpreadsheetRow = function (spreadsheet, headers, data, xml) {
   })
 
   this.toJSON = () => {
-    return this.headers.reduce((json, key) => { json[key] = this[key]; return json }, {})
+    return this.headers.reduce((json, key) => {
+      json[key] = this[key]
+      return json
+    }, {})
   }
 
   this.save = (cb) => {
