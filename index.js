@@ -93,7 +93,7 @@ var GooogleSpreadsheet = function (ss_key, auth_id, options) {
         if (auth_mode !== 'jwt') return step()
         // check if jwt token is expired
         if (google_auth.expires > +new Date()) return step()
-        renewJwtAuth(step)
+        this.renewJwtAuth(step)
       },
       request: (result, step) => {
         if ( google_auth ) {
@@ -202,7 +202,7 @@ var GooogleSpreadsheet = function (ss_key, auth_id, options) {
     })
   }
 
-  this.addRow = function( worksheet_id, data, cb ){
+  this.addRow = (worksheet_id, data, cb) => {
     if (!this.headerMap[worksheet_id]) {
       return this.getRows(worksheet_id, { 'max-row': 1 }, () => this.addRow(worksheet_id, data, cb))
     }
@@ -259,7 +259,6 @@ var SpreadsheetRow = function (spreadsheet, headers, data, xml) {
     var val = data[key]
     if (key.substring(0, 4) === "gsx:") {
       var prop = headers[idx++]
-
       if(typeof val === 'object' && Object.keys(val).length === 0) val = null
 
       if (key === "gsx:") this.headerMap[prop] = key.substring(0, 3)
@@ -267,7 +266,7 @@ var SpreadsheetRow = function (spreadsheet, headers, data, xml) {
 
       if (val === 'TRUE') val = true
       else if (val === 'FALSE') val = false
-      else if (!Number.isNaN(+val)) val = +val
+      else if (val !== '' && val !== null && !Number.isNaN(+val)) val = +val
       this[prop] = val
     } else {
       if (key === "id") this[key] = val
@@ -282,6 +281,7 @@ var SpreadsheetRow = function (spreadsheet, headers, data, xml) {
 
   this.toJSON = () => {
     return this.headers.reduce((json, key) => {
+      if (this[key] === undefined) return json
       json[key] = this[key]
       return json
     }, {})
@@ -357,7 +357,7 @@ var forceArray = function(val) {
 }
 
 var xmlSafeValue = function(val){
-  if ( val === null ) return ''
+  if ( val === null || val === undefined ) return ''
   return String(val).replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
