@@ -214,7 +214,10 @@ var GooogleSpreadsheet = function (ss_key, auth_id, options) {
       }
     })
     data_xml += '</entry>'
-    this.makeFeedRequest(["list", ss_key, worksheet_id], 'POST', data_xml, cb)
+    this.makeFeedRequest(["list", ss_key, worksheet_id], 'POST', data_xml, (err, data, xml) => {
+      if (err) return cb(err)
+      cb(null, new SpreadsheetRow(this, this.headers[worksheet_id], data, xml))
+    })
   }
 
   this.getCells = (worksheet_id, opts, cb) => {
