@@ -1,4 +1,9 @@
 
+1.2.3 / 2016-05-12
+==================
+
+  * return SpreadsheetRow from addRow operation
+
 1.2.2 / 2016-04-02
 ==================
 
