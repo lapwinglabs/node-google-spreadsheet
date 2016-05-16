@@ -2,7 +2,7 @@
   "author": "Finbox.io <code@finbox.io> (https://finbox.io)",
   "name": "finbox-google-sheets",
   "description": "Google Spreadsheet Data API -- simple interface to read/write rows + cells",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "keywords": [
     "google",
     "spreadsheet",
