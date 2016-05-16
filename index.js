@@ -208,7 +208,7 @@ var GooogleSpreadsheet = function (ss_key, auth_id, options) {
     }
     var data_xml = '<entry xmlns="http://www.w3.org/2005/Atom" xmlns:gsx="http://schemas.google.com/spreadsheets/2006/extended">' + "\n"
     Object.keys(data).forEach((key) => {
-      if (key !== 'id' && key !== 'title' && key !== 'content' && key !== '_links') {
+      if (this.headerMap[worksheet_id][key] || (key !== 'id' && key !== 'title' && key !== 'content' && key !== '_links')) {
         var prop = this.headerMap[worksheet_id][key]
         data_xml += '<gsx:'+ xmlSafeColumnName(prop) + '>' + xmlSafeValue(data[key]) + '</gsx:'+ xmlSafeColumnName(prop) + '>' + "\n"
       }
